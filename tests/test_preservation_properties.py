@@ -395,6 +395,47 @@ class TestPhaseOrderingPreservation:
         assert failed == 2
         assert total == 3
 
+    def test_run_independent_starts_all_valid_types_without_phase_timeout(self):
+        from gaokao_vault.scheduler.orchestrator import Orchestrator
+
+        mock_pool = MagicMock()
+        orch = Orchestrator(db_pool=mock_pool, mode="incremental")
+        run_single = AsyncMock(side_effect=[{"failed": 0}, {"failed": 1}])
+
+        with patch.object(orch, "run_single", new=run_single):
+            results = asyncio.run(orch.run_independent(["enrollment_plans", "special", "unknown"]))
+
+        assert results == [{"failed": 0}, {"failed": 1}]
+        assert run_single.await_count == 2
+        assert [call.args[0] for call in run_single.await_args_list] == ["enrollment_plans", "special"]
+
+    def test_run_independent_limits_concurrent_types(self):
+        from gaokao_vault.scheduler.orchestrator import Orchestrator
+
+        mock_pool = MagicMock()
+        orch = Orchestrator(db_pool=mock_pool, mode="incremental")
+        running = 0
+        max_seen = 0
+
+        async def _run_single(_task_type: str):
+            nonlocal max_seen, running
+            running += 1
+            max_seen = max(max_seen, running)
+            await asyncio.sleep(0)
+            running -= 1
+            return {"failed": 0}
+
+        with patch.object(orch, "run_single", new=AsyncMock(side_effect=_run_single)):
+            results = asyncio.run(
+                orch.run_independent(
+                    ["schools", "majors", "enrollment_plans", "special"],
+                    max_concurrent=2,
+                )
+            )
+
+        assert len(results or []) == 4
+        assert max_seen == 2
+
 
 # ---------------------------------------------------------------------------
 # Property 2d: Spider Exception Handling
@@ -498,6 +539,41 @@ class TestSpiderExceptionHandlingPreservation:
         # Verify error was passed
         call_args = orch.task_manager.finish_task.call_args
         assert call_args[1].get("error") is not None or (len(call_args[0]) >= 3 and call_args[0][2] is not None)
+
+    def test_orchestrator_run_single_finishes_task_when_timeout_pause_raises(self):
+        """A timeout must not leave crawl_tasks stuck in running if pause() fails."""
+        from gaokao_vault.config import CrawlConfig
+        from gaokao_vault.scheduler.orchestrator import Orchestrator
+
+        class _TimeoutSpider:
+            name = "timeout_spider"
+
+            def __init__(self, **_kwargs):
+                self._stats = {"new": 0, "updated": 0, "unchanged": 0, "failed": 0}
+
+            async def stream(self):
+                await asyncio.sleep(1)
+                if False:
+                    yield None
+
+            def pause(self):
+                raise RuntimeError("inactive")
+
+        mock_pool = MagicMock()
+        orch = Orchestrator(db_pool=mock_pool, config=CrawlConfig(spider_timeout=0), mode="full")
+        orch.task_manager = MagicMock()
+        orch.task_manager.start_task = AsyncMock(return_value=99)
+        orch.task_manager.finish_task = AsyncMock()
+
+        with patch("gaokao_vault.scheduler.orchestrator.SPIDER_MAP", {"schools": _TimeoutSpider}):
+            stats = asyncio.run(orch.run_single("schools"))
+
+        assert stats["failed"] == 1
+        orch.task_manager.finish_task.assert_awaited_once()
+        call_args = orch.task_manager.finish_task.call_args
+        assert call_args is not None
+        assert call_args.args[0] == 99
+        assert "Timed out" in call_args.kwargs["error"]
 
 
 # ---------------------------------------------------------------------------
