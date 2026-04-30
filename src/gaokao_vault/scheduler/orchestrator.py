@@ -100,6 +100,23 @@ class Orchestrator:
         logger.info("Running selected types: %s", types)
         await self._run_phase(types)
 
+    async def run_independent(self, types: list[str]) -> list | None:
+        logger.info("Running independent types: %s", types)
+        valid_types = [t for t in types if t in SPIDER_MAP]
+        if not valid_types:
+            return None
+
+        results = await asyncio.gather(
+            *(self.run_single(t) for t in valid_types),
+            return_exceptions=True,
+        )
+        for task_type, result in zip(valid_types, results, strict=True):
+            if isinstance(result, Exception):
+                logger.error("Independent task %s failed: %s", task_type, result)
+            else:
+                logger.info("Independent task %s stats: %s", task_type, result)
+        return results
+
     async def run_single(self, task_type: str) -> dict[str, int]:
         spider_cls = SPIDER_MAP.get(task_type)
         if spider_cls is None:
@@ -142,11 +159,20 @@ class Orchestrator:
             )
         except asyncio.TimeoutError:
             logger.warning("Spider %s timed out after %ds, calling pause()", task_type, timeout)
-            spider.pause()
+            try:
+                spider.pause()
+            except Exception:
+                logger.exception("Spider %s pause() failed after timeout", task_type)
             stats = spider._stats
             stats["failed"] = max(stats.get("failed", 0), 1)
             await self.task_manager.finish_task(task_id, stats, error=f"Timed out after {timeout}s")
             return stats
+        except asyncio.CancelledError:
+            logger.warning("Spider %s was cancelled, marking task as failed", task_type)
+            stats = spider._stats
+            stats["failed"] = max(stats.get("failed", 0), 1)
+            await self.task_manager.finish_task(task_id, stats, error="Cancelled")
+            raise
         except Exception as exc:
             logger.exception("Spider %s failed", task_type)
             stats = {"new": 0, "updated": 0, "unchanged": 0, "failed": 1}

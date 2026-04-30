@@ -100,17 +100,24 @@ class CronExpression:
 
 
 class IncrementalCronScheduler:
-    def __init__(self, app_config: AppConfig):
+    def __init__(self, app_config: AppConfig, *, mode: str | None = None, types: list[str] | None = None):
         self._app_config = app_config
         self._cron = CronExpression.parse(app_config.schedule.cron)
+        self._mode = mode or app_config.schedule.mode
+        if self._mode not in ("full", "incremental"):
+            msg = f"Invalid schedule mode '{self._mode}'. Must be 'full' or 'incremental'."
+            raise ValueError(msg)
+        self._types = types if types is not None else app_config.schedule.types
         self._running_task: asyncio.Task[None] | None = None
         self._last_checked_minute: datetime | None = None
 
     async def run_forever(self) -> None:
         logger.info(
-            "Scheduler started cron=%s timezone=%s mode=incremental",
+            "Scheduler started cron=%s timezone=%s mode=%s types=%s",
             self._cron.raw,
             _SHANGHAI_TZ.key,
+            self._mode,
+            self._types or "all",
         )
         while True:
             now = self._current_minute()
@@ -125,38 +132,44 @@ class IncrementalCronScheduler:
 
         if self._running_task is not None and not self._running_task.done():
             logger.warning(
-                "Skipping scheduled incremental crawl at %s because a previous run is still active",
+                "Skipping scheduled crawl at %s because a previous run is still active",
                 now.isoformat(),
             )
             return
 
-        logger.info("Cron matched at %s; starting incremental crawl", now.isoformat())
+        logger.info("Cron matched at %s; starting scheduled crawl", now.isoformat())
         self._running_task = asyncio.create_task(self._run_incremental_crawl(now))
 
     async def _run_incremental_crawl(self, scheduled_at: datetime) -> None:
+        from gaokao_vault.constants import PHASE2_TYPES, PHASE3_TYPES
         from gaokao_vault.db.connection import close_pool, create_pool
         from gaokao_vault.scheduler.orchestrator import Orchestrator
 
         started = monotonic()
         pool = await create_pool(self._app_config.db)
+        scheduled_types = self._types or [task_type.value for task_type in [*PHASE2_TYPES, *PHASE3_TYPES]]
         try:
             orchestrator = Orchestrator(
                 db_pool=pool,
                 config=self._app_config.crawl,
-                mode="incremental",
+                mode=self._mode,
                 db_config=self._app_config.db,
                 app_config=self._app_config,
             )
-            await orchestrator.run_all()
+            await orchestrator.run_independent(scheduled_types)
         except Exception:
             logger.exception(
-                "Scheduled incremental crawl failed scheduled_at=%s",
+                "Scheduled crawl failed scheduled_at=%s mode=%s types=%s",
                 scheduled_at.isoformat(),
+                self._mode,
+                scheduled_types,
             )
         else:
             logger.info(
-                "Scheduled incremental crawl finished scheduled_at=%s duration=%.1fs",
+                "Scheduled crawl finished scheduled_at=%s mode=%s types=%s duration=%.1fs",
                 scheduled_at.isoformat(),
+                self._mode,
+                scheduled_types,
                 monotonic() - started,
             )
         finally:

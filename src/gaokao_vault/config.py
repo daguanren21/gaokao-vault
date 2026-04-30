@@ -43,6 +43,8 @@ class ScheduleConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GAOKAO_SCHEDULE__")
 
     cron: str = "0 0 * * *"
+    mode: str = "incremental"
+    types: list[str] = Field(default_factory=list)
 
 
 class OpenAIConfig(BaseSettings):

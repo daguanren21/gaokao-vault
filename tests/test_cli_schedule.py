@@ -37,7 +37,7 @@ class TestScheduleCommandExecution:
 
         assert result.exit_code == 0
         mock_config_cls.assert_called_once()
-        mock_scheduler_cls.assert_called_once_with(config)
+        mock_scheduler_cls.assert_called_once_with(config, mode=None, types=None)
         scheduler.run_forever.assert_awaited_once()
 
     @patch("gaokao_vault.cli._setup_logging")
@@ -63,3 +63,25 @@ class TestScheduleCommandExecution:
         args, kwargs = mock_setup_logging.call_args
         assert args[0] is True
         assert kwargs.get("log_dir") is None
+
+    @patch("gaokao_vault.scheduler.cron_runner.IncrementalCronScheduler")
+    @patch("gaokao_vault.config.AppConfig")
+    def test_schedule_command_accepts_mode_and_types(
+        self,
+        mock_config_cls,
+        mock_scheduler_cls,
+    ) -> None:
+        config = MagicMock()
+        config.crawl.log_dir = None
+        scheduler = MagicMock()
+        scheduler.run_forever = AsyncMock()
+        mock_config_cls.return_value = config
+        mock_scheduler_cls.return_value = scheduler
+
+        result = runner.invoke(
+            app,
+            ["schedule", "--mode", "incremental", "--types", "enrollment_plans", "--types", "special"],
+        )
+
+        assert result.exit_code == 0
+        mock_scheduler_cls.assert_called_once_with(config, mode="incremental", types=["enrollment_plans", "special"])

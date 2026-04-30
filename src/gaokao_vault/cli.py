@@ -181,9 +181,15 @@ def healthcheck() -> None:
 
 @app.command()
 def schedule(
+    mode: Annotated[str | None, typer.Option("--mode", "-m", help="full or incremental")] = None,
+    types: Annotated[list[str] | None, typer.Option("--types", "-t", help="Specific task types")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
-    """Run the cron scheduler for incremental crawls."""
+    """Run the cron scheduler."""
+    if mode is not None and mode not in ("full", "incremental"):
+        typer.echo(f"Invalid mode '{mode}'. Must be 'full' or 'incremental'.", err=True)
+        raise typer.Exit(code=1)
+
     from gaokao_vault.config import AppConfig
 
     config = AppConfig()
@@ -192,7 +198,7 @@ def schedule(
     async def _run():
         from gaokao_vault.scheduler.cron_runner import IncrementalCronScheduler
 
-        scheduler = IncrementalCronScheduler(config)
+        scheduler = IncrementalCronScheduler(config, mode=mode, types=types)
         await scheduler.run_forever()
 
     asyncio.run(_run())

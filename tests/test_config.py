@@ -26,6 +26,8 @@ class TestConfig:
     def test_schedule_config_defaults(self):
         config = ScheduleConfig()
         assert config.cron == "0 0 * * *"
+        assert config.mode == "incremental"
+        assert config.types == []
 
 
 class TestConstants:
