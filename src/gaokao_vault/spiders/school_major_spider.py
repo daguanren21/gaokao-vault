@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 _HREF_CODE_PATTERN = re.compile(r"(?:code|zydm|specialityCode)-([A-Za-z0-9]+)")
 SCHOOL_MAJOR_URL_TEMPLATE = f"{BASE_URL}/sch/listzyjs--schId-{{sch_id}},categoryId-417877,mindex-3.dhtml"
+_MIN_READY_SCHOOLS = 100
+_MIN_READY_MAJORS = 100
 
 
 class SchoolMajorSpider(BaseGaokaoSpider):
@@ -48,6 +50,12 @@ class SchoolMajorSpider(BaseGaokaoSpider):
                 """,
                 task_type,
             )
+
+    async def _upstream_table_counts(self) -> tuple[int, int]:
+        async with (await self._get_pool()).acquire() as conn:
+            school_rows = await conn.fetch("SELECT COUNT(*) AS count FROM schools")
+            major_rows = await conn.fetch("SELECT COUNT(*) AS count FROM majors")
+        return int(school_rows[0]["count"]), int(major_rows[0]["count"])
 
     @staticmethod
     def _extract_code_from_href(href: str) -> str | None:
@@ -156,18 +164,25 @@ class SchoolMajorSpider(BaseGaokaoSpider):
         try:
             schools_row = await self._load_latest_task_status(TaskType.SCHOOLS)
             majors_row = await self._load_latest_task_status(TaskType.MAJORS)
+            schools_count, majors_count = await self._upstream_table_counts()
 
-            schools_stable = bool(
-                schools_row
-                and schools_row["status"] == "success"
-                and schools_row["failed_items"] == 0
-                and schools_row["finished_at"] is not None
+            schools_stable = (
+                bool(
+                    schools_row
+                    and schools_row["status"] == "success"
+                    and schools_row["failed_items"] == 0
+                    and schools_row["finished_at"] is not None
+                )
+                or schools_count >= _MIN_READY_SCHOOLS
             )
-            majors_stable = bool(
-                majors_row
-                and majors_row["status"] == "success"
-                and majors_row["failed_items"] == 0
-                and majors_row["finished_at"] is not None
+            majors_stable = (
+                bool(
+                    majors_row
+                    and majors_row["status"] == "success"
+                    and majors_row["failed_items"] == 0
+                    and majors_row["finished_at"] is not None
+                )
+                or majors_count >= _MIN_READY_MAJORS
             )
         except Exception:
             logger.warning("Failed to verify upstream task stability for school majors", exc_info=True)
@@ -175,7 +190,7 @@ class SchoolMajorSpider(BaseGaokaoSpider):
 
         if not schools_stable or not majors_stable:
             logger.warning(
-                "Skipping school_majors crawl because upstream tasks are not stable (schools=%s majors=%s)",
+                "Skipping school_majors crawl because upstream tasks are not ready (schools=%s majors=%s)",
                 schools_stable,
                 majors_stable,
             )

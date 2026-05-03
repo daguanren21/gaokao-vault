@@ -39,9 +39,18 @@ class _FakeMajorLookupConnection:
 
 
 class _FakeTaskStatusConnection:
-    def __init__(self, task_rows: dict[str, dict | None], schools: list[dict] | None = None) -> None:
+    def __init__(
+        self,
+        task_rows: dict[str, dict | None],
+        schools: list[dict] | None = None,
+        *,
+        school_count: int | None = None,
+        major_count: int | None = None,
+    ) -> None:
         self.task_rows = task_rows
         self.schools = schools or []
+        self.school_count = school_count if school_count is not None else len(self.schools)
+        self.major_count = major_count if major_count is not None else 0
         self.fetch_calls: list[tuple[str, tuple[object, ...]]] = []
 
     async def fetchrow(self, _query: str, task_type: str):
@@ -49,6 +58,10 @@ class _FakeTaskStatusConnection:
 
     async def fetch(self, query: str, *args: object):
         self.fetch_calls.append((query, args))
+        if "COUNT(*) AS count FROM schools" in query:
+            return [{"count": self.school_count}]
+        if "COUNT(*) AS count FROM majors" in query:
+            return [{"count": self.major_count}]
         if "FROM schools ORDER BY id" in query:
             return self.schools
         return []
@@ -351,7 +364,7 @@ def test_start_requests_skips_when_schools_task_is_not_stable():
         requests = asyncio.run(_collect(spider.start_requests()))
 
     assert requests == []
-    assert conn.fetch_calls == []
+    assert all("FROM schools ORDER BY id" not in query for query, _args in conn.fetch_calls)
 
 
 def test_start_requests_skips_when_majors_task_is_not_stable():
@@ -368,7 +381,7 @@ def test_start_requests_skips_when_majors_task_is_not_stable():
         requests = asyncio.run(_collect(spider.start_requests()))
 
     assert requests == []
-    assert conn.fetch_calls == []
+    assert all("FROM schools ORDER BY id" not in query for query, _args in conn.fetch_calls)
 
 
 def test_start_requests_yields_school_requests_when_upstreams_are_stable():
@@ -386,3 +399,22 @@ def test_start_requests_yields_school_requests_when_upstreams_are_stable():
 
     assert [request.meta["school_id"] for request in requests] == [1, 2]
     assert [request.meta["sch_id"] for request in requests] == [34, 35]
+
+
+def test_start_requests_uses_existing_upstream_rows_when_latest_school_task_failed():
+    spider = _make_school_major_spider()
+    conn = _FakeTaskStatusConnection(
+        task_rows={
+            "schools": {"status": "failed", "failed_items": 1, "finished_at": "2026-04-23T00:00:00"},
+            "majors": {"status": "success", "failed_items": 0, "finished_at": "2026-04-23T00:00:00"},
+        },
+        schools=[{"id": 1, "sch_id": 34}],
+        school_count=2800,
+        major_count=1800,
+    )
+
+    with patch.object(spider, "_get_pool", new=AsyncMock(return_value=_FakePool(conn))):
+        requests = asyncio.run(_collect(spider.start_requests()))
+
+    assert len(requests) == 1
+    assert requests[0].meta == {"school_id": 1, "sch_id": 34}
