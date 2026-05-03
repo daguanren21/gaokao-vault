@@ -30,6 +30,7 @@ def test_upsert_special_enrollment_preserves_strong_base_fields() -> None:
                 "province_code": "11",
                 "year": 2025,
                 "title": "测试大学2025年强基计划招生简章",
+                "content_text": "报名时间: 2025年4月10日至2025年4月30日.",
                 "application_url": "https://bm.chsi.com.cn/jcxkzs/sch/10001",
                 "registration_window": {"start": "2025-04-10", "end": "2025-04-30"},
                 "registration_start": "2025-04-10",
@@ -49,6 +50,7 @@ def test_upsert_special_enrollment_preserves_strong_base_fields() -> None:
     assert special_id == 66
     assert "special_enrollments" in conn.query
     assert "special_admission_type" in conn.query
+    assert "content_text" in conn.query
     assert "province_code" in conn.query
     assert "registration_window" in conn.query
     assert "shortlist_rule" in conn.query
@@ -58,6 +60,7 @@ def test_upsert_special_enrollment_preserves_strong_base_fields() -> None:
     assert "composite_score_formula" in conn.query
     assert "eligible_majors" in conn.query
     assert "strong_foundation" in conn.args
+    assert "报名时间: 2025年4月10日至2025年4月30日." in conn.args
     assert "11" in conn.args
     assert json.dumps({"start": "2025-04-10", "end": "2025-04-30"}, ensure_ascii=False) in conn.args
     assert "https://bm.chsi.com.cn/jcxkzs/sch/10001" in conn.args

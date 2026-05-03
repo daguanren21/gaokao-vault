@@ -16,7 +16,8 @@ class TestConfig:
         config = CrawlConfig()
         assert config.concurrency == 2
         assert config.base_delay > 0
-        assert config.spider_timeout == 14400
+        assert config.spider_timeout == 21600
+        assert config.phase_timeout == 21600
         assert config.browser_timeout_ms == 120000
         assert config.school_major_min_ready_schools == 100
         assert config.school_major_min_ready_majors == 100

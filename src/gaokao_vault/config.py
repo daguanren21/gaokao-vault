@@ -34,8 +34,8 @@ class CrawlConfig(BaseSettings):
     rs_wait_ms: int = 10000  # Wait time (ms) for RS anti-bot JS challenge
     browser_timeout_ms: int = 120000  # Navigation timeout (ms) for stealth browser requests
     log_dir: str = "./crawl_data/logs"
-    spider_timeout: int = 14400  # Per-spider timeout in seconds (4 hours)
-    phase_timeout: int = 14400  # Per-phase timeout in seconds (4 hours)
+    spider_timeout: int = 21600  # Per-spider timeout in seconds (6 hours)
+    phase_timeout: int = 21600  # Per-phase timeout in seconds (6 hours)
     heartbeat_interval: int = 120  # Heartbeat log interval in seconds
     school_major_min_ready_schools: int = 100
     school_major_min_ready_majors: int = 100
