@@ -64,6 +64,8 @@ def test_upsert_enrollment_plan_preserves_rule_and_quality_fields() -> None:
     assert "source_url" in conn.query
     assert "physical_exam_or_political_review" in conn.query
     assert "political_review_requirement" in conn.query
+    assert "ON CONFLICT" not in conn.query
+    assert "WITH updated AS" in conn.query
     assert "regular" in conn.args
     assert "01" in conn.args
     assert "普通批" in conn.args

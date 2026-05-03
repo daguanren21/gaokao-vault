@@ -8,44 +8,60 @@ import asyncpg
 async def upsert_enrollment_plan(conn: asyncpg.Connection, data: dict) -> int:
     row = await conn.fetchrow(
         """
-        INSERT INTO enrollment_plans (school_id, province_id, year, subject_category_id,
-            batch, batch_code, batch_category, batch_segment, major_name, major_id, plan_count, duration, tuition, note,
-            major_group_code, major_code_raw, campus, education_location,
-            selection_requirement, physical_exam_limit, single_subject_limit,
-            adjustment_rule, program_type, eligibility_requirements,
-            physical_exam_or_political_review, political_review_requirement, service_obligation,
-            data_source, source_url, source_updated_at, quality_flags,
-            content_hash, crawl_task_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
-        ON CONFLICT (school_id, province_id, year, subject_category_id, batch, major_name) DO UPDATE SET
-            batch_code=EXCLUDED.batch_code,
-            batch_category=EXCLUDED.batch_category,
-            batch_segment=EXCLUDED.batch_segment,
-            major_id=EXCLUDED.major_id,
-            plan_count=EXCLUDED.plan_count,
-            duration=EXCLUDED.duration,
-            tuition=EXCLUDED.tuition,
-            note=EXCLUDED.note,
-            major_group_code=EXCLUDED.major_group_code,
-            major_code_raw=EXCLUDED.major_code_raw,
-            campus=EXCLUDED.campus,
-            education_location=EXCLUDED.education_location,
-            selection_requirement=EXCLUDED.selection_requirement,
-            physical_exam_limit=EXCLUDED.physical_exam_limit,
-            single_subject_limit=EXCLUDED.single_subject_limit,
-            adjustment_rule=EXCLUDED.adjustment_rule,
-            program_type=EXCLUDED.program_type,
-            eligibility_requirements=EXCLUDED.eligibility_requirements,
-            physical_exam_or_political_review=EXCLUDED.physical_exam_or_political_review,
-            political_review_requirement=EXCLUDED.political_review_requirement,
-            service_obligation=EXCLUDED.service_obligation,
-            data_source=EXCLUDED.data_source,
-            source_url=EXCLUDED.source_url,
-            source_updated_at=EXCLUDED.source_updated_at,
-            quality_flags=EXCLUDED.quality_flags,
-            content_hash=EXCLUDED.content_hash,
-            crawl_task_id=EXCLUDED.crawl_task_id
-        RETURNING id
+        WITH updated AS (
+            UPDATE enrollment_plans
+            SET batch_code = $6,
+                batch_category = $7,
+                batch_segment = $8,
+                major_id = $10,
+                plan_count = $11,
+                duration = $12,
+                tuition = $13,
+                note = $14,
+                major_group_code = $15,
+                major_code_raw = $16,
+                campus = $17,
+                education_location = $18,
+                selection_requirement = $19,
+                physical_exam_limit = $20,
+                single_subject_limit = $21,
+                adjustment_rule = $22,
+                program_type = $23,
+                eligibility_requirements = $24,
+                physical_exam_or_political_review = $25,
+                political_review_requirement = $26,
+                service_obligation = $27,
+                data_source = $28,
+                source_url = $29,
+                source_updated_at = $30,
+                quality_flags = $31,
+                content_hash = $32,
+                crawl_task_id = $33
+            WHERE school_id = $1
+              AND province_id = $2
+              AND year = $3
+              AND subject_category_id IS NOT DISTINCT FROM $4
+              AND batch IS NOT DISTINCT FROM $5
+              AND major_name IS NOT DISTINCT FROM $9
+            RETURNING id
+        ),
+        inserted AS (
+            INSERT INTO enrollment_plans (school_id, province_id, year, subject_category_id,
+                batch, batch_code, batch_category, batch_segment, major_name, major_id, plan_count, duration, tuition, note,
+                major_group_code, major_code_raw, campus, education_location,
+                selection_requirement, physical_exam_limit, single_subject_limit,
+                adjustment_rule, program_type, eligibility_requirements,
+                physical_exam_or_political_review, political_review_requirement, service_obligation,
+                data_source, source_url, source_updated_at, quality_flags,
+                content_hash, crawl_task_id)
+            SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33
+            WHERE NOT EXISTS (SELECT 1 FROM updated)
+            RETURNING id
+        )
+        SELECT id FROM updated
+        UNION ALL
+        SELECT id FROM inserted
+        LIMIT 1
         """,
         data["school_id"],
         data["province_id"],
