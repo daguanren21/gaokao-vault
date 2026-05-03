@@ -18,7 +18,18 @@ class TestConfig:
         assert config.base_delay > 0
         assert config.spider_timeout == 14400
         assert config.browser_timeout_ms == 120000
+        assert config.school_major_min_ready_schools == 100
+        assert config.school_major_min_ready_majors == 100
         assert 0 < config.jitter_ratio < 1
+
+    def test_crawl_config_accepts_school_major_readiness_threshold_env(self, monkeypatch):
+        monkeypatch.setenv("GAOKAO_CRAWL__SCHOOL_MAJOR_MIN_READY_SCHOOLS", "2800")
+        monkeypatch.setenv("GAOKAO_CRAWL__SCHOOL_MAJOR_MIN_READY_MAJORS", "1800")
+
+        config = CrawlConfig()
+
+        assert config.school_major_min_ready_schools == 2800
+        assert config.school_major_min_ready_majors == 1800
 
     def test_proxy_config_defaults(self):
         config = ProxyConfig()

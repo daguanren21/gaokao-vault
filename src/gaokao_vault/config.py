@@ -37,6 +37,8 @@ class CrawlConfig(BaseSettings):
     spider_timeout: int = 14400  # Per-spider timeout in seconds (4 hours)
     phase_timeout: int = 14400  # Per-phase timeout in seconds (4 hours)
     heartbeat_interval: int = 120  # Heartbeat log interval in seconds
+    school_major_min_ready_schools: int = 100
+    school_major_min_ready_majors: int = 100
 
 
 class ScheduleConfig(BaseSettings):
