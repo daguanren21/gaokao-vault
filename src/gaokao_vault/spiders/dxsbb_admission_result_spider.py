@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import re
 from typing import TYPE_CHECKING
-from urllib.parse import urljoin
 
 from scrapling.fetchers import FetcherSession
 from scrapling.spiders import Request, Response
@@ -16,13 +15,13 @@ from gaokao_vault.pipeline.batch_normalizer import normalize_batch
 from gaokao_vault.pipeline.quality import missing_field_flags
 from gaokao_vault.pipeline.validator import validate_item
 from gaokao_vault.spiders.base import BaseGaokaoSpider
+from gaokao_vault.spiders.dxsbb import DXSBB_BASE_URL, iter_article_links, next_list_page_url
 
 if TYPE_CHECKING:
     import asyncpg
 
 logger = logging.getLogger(__name__)
 
-DXSBB_BASE_URL = "https://www.dxsbb.com"
 DXSBB_ADMISSION_LIST_URL = f"{DXSBB_BASE_URL}/news/list_458.html"
 _DATA_SOURCE = "dxsbb.com"
 _OFFICIAL_DATA_SOURCE = "gaokao.chsi.com.cn"
@@ -46,24 +45,14 @@ class DxsbbAdmissionResultSpider(BaseGaokaoSpider):
         if response.status == 404:
             return
 
-        seen_urls: set[str] = set()
-        for link in response.css(".listBox a[href^='/news/'], .listBox2news a[href^='/news/']"):
-            href = link.attrib.get("href", "").strip()
-            title = _link_title(link)
-            if not href or not title or not _ADMISSION_TITLE_PATTERN.search(title):
-                continue
+        for article in iter_article_links(
+            response, predicate=lambda title: bool(_ADMISSION_TITLE_PATTERN.search(title))
+        ):
+            yield Request(article.url, callback=self.parse_article, meta={"title": article.title})
 
-            url = urljoin(DXSBB_BASE_URL, href)
-            if url in seen_urls:
-                continue
-            seen_urls.add(url)
-            yield Request(url, callback=self.parse_article, meta={"title": title})
-
-        for link in response.css(".listNav a[href*='list_458_']"):
-            href = link.attrib.get("href", "").strip()
-            if not href or "下一页" not in "".join(link.css("img::attr(alt), ::text").getall()):
-                continue
-            yield Request(urljoin(DXSBB_BASE_URL, href), callback=self.parse_list)
+        next_url = next_list_page_url(response)
+        if next_url and "list_458_" in next_url:
+            yield Request(next_url, callback=self.parse_list)
 
     async def parse_article(self, response: Response):
         if response.status == 404:
@@ -205,10 +194,6 @@ class DxsbbAdmissionResultSpider(BaseGaokaoSpider):
         }
         data["quality_flags"] = missing_field_flags(data, ("min_score", "min_rank", "admitted_count"))
         return data
-
-
-def _link_title(link) -> str:
-    return " ".join(part.strip() for part in link.css("h3::text, img::attr(alt), ::text").getall() if part.strip())
 
 
 def _node_text(node) -> str:

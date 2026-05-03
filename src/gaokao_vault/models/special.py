@@ -13,6 +13,7 @@ class SpecialEnrollmentItem(BaseModel):
     year: int = Field(ge=2000, le=2100)
     title: str | None = None
     content: str | None = None
+    content_text: str | None = None
     publish_date: date | None = None
     source_url: str | None = None
     application_url: str | None = None

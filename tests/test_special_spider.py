@@ -157,6 +157,9 @@ def test_parse_dxsbb_article_persists_special_enrollment_content() -> None:
     assert items[0]["year"] == 2026
     assert items[0]["title"] == "强基计划招生程序及管理要求"
     assert items[0]["source_url"] == "https://www.dxsbb.com/news/70169.html"
+    assert items[0]["content_text"] == (
+        "报名时间: 2026年4月10日至2026年4月30日.\n招生专业: 数学类,物理学类.\n录取规则: 按综合成绩择优录取."
+    )
     assert str(items[0]["publish_date"]) == "2026-04-07"
     assert str(items[0]["registration_start"]) == "2026-04-10"
     assert str(items[0]["registration_end"]) == "2026-04-30"

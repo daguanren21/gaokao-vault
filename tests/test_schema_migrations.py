@@ -17,3 +17,10 @@ def test_special_enrollments_existing_tables_get_null_safe_conflict_target_index
     assert "CREATE UNIQUE INDEX IF NOT EXISTS idx_special_enrollments_unique_key" in schema_sql
     assert "ON special_enrollments(enrollment_type, school_id, year, title)" in schema_sql
     assert "NULLS NOT DISTINCT" in schema_sql
+
+
+def test_special_enrollments_existing_tables_get_content_text_column() -> None:
+    schema_sql = Path("src/gaokao_vault/db/schema.sql").read_text()
+
+    assert "content_text    TEXT" in schema_sql
+    assert "ALTER TABLE special_enrollments ADD COLUMN IF NOT EXISTS content_text TEXT" in schema_sql

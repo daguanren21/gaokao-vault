@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime
-from urllib.parse import urljoin
 
 from scrapling.fetchers import FetcherSession
 from scrapling.spiders import Request, Response
@@ -13,10 +12,10 @@ from gaokao_vault.db.queries.enrollment import upsert_timeline
 from gaokao_vault.models.enrollment import TimelineItem
 from gaokao_vault.pipeline.validator import validate_item
 from gaokao_vault.spiders.base import BaseGaokaoSpider
+from gaokao_vault.spiders.dxsbb import DXSBB_BASE_URL, iter_article_links, next_list_page_url
 
 logger = logging.getLogger(__name__)
 
-DXSBB_BASE_URL = "https://www.dxsbb.com"
 DXSBB_TIMELINE_LIST_URL = f"{DXSBB_BASE_URL}/news/list_916.html"
 
 PROVINCES = (
@@ -120,35 +119,26 @@ class TimelineSpider(BaseGaokaoSpider):
         if response.status == 404:
             return
 
-        seen_urls: set[str] = set()
-        for link in response.css(".listBox a[href^='/news/'], .listBox2news a[href^='/news/']"):
-            href = link.attrib.get("href", "").strip()
-            title = _link_title(link)
-            article_meta = _timeline_article_meta(title)
-            if not href or article_meta is None:
+        for article in iter_article_links(response):
+            article_meta = _timeline_article_meta(article.title)
+            if article_meta is None:
                 continue
 
-            url = urljoin(DXSBB_BASE_URL, href)
-            if url in seen_urls:
-                continue
-            seen_urls.add(url)
             province_id, province_name, year = article_meta
             yield Request(
-                url,
+                article.url,
                 callback=self.parse_dxsbb_article,
                 meta={
                     "province_id": province_id,
                     "province_name": province_name,
                     "year": year,
-                    "title": title,
+                    "title": article.title,
                 },
             )
 
-        for link in response.css(".listNav a[href]"):
-            href = link.attrib.get("href", "").strip()
-            link_text = "".join(link.css("img::attr(alt), ::text").getall())
-            if href and "下一页" in link_text:
-                yield Request(urljoin(DXSBB_BASE_URL, href), callback=self.parse_dxsbb_list)
+        next_url = next_list_page_url(response)
+        if next_url:
+            yield Request(next_url, callback=self.parse_dxsbb_list)
 
     async def parse_dxsbb_article(self, response: Response):
         if response.request is None or response.status == 404:
@@ -213,14 +203,6 @@ def _parse_datetime(text: str) -> datetime | None:
         except ValueError:
             continue
     return None
-
-
-def _link_title(link) -> str:
-    for selector in ("h3::text", "img::attr(alt)"):
-        value = link.css(selector).get()
-        if value and value.strip():
-            return value.strip()
-    return " ".join(part.strip() for part in link.css("::text").getall() if part.strip())
 
 
 def _timeline_article_meta(title: str) -> tuple[int, str, int] | None:

@@ -486,6 +486,7 @@ CREATE TABLE IF NOT EXISTS special_enrollments (
     year            SMALLINT NOT NULL,
     title           VARCHAR(200),
     content         TEXT,
+    content_text    TEXT,
     publish_date    DATE,
     source_url      VARCHAR(255),
     application_url VARCHAR(255),
@@ -513,6 +514,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_special_enrollments_unique_key
 
 ALTER TABLE special_enrollments ADD COLUMN IF NOT EXISTS special_admission_type VARCHAR(50);
 ALTER TABLE special_enrollments ADD COLUMN IF NOT EXISTS province_code VARCHAR(20);
+ALTER TABLE special_enrollments ADD COLUMN IF NOT EXISTS content_text TEXT;
 ALTER TABLE special_enrollments ADD COLUMN IF NOT EXISTS application_url VARCHAR(255);
 ALTER TABLE special_enrollments ADD COLUMN IF NOT EXISTS registration_window JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE special_enrollments ADD COLUMN IF NOT EXISTS registration_start DATE;

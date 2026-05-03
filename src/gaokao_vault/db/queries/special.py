@@ -9,15 +9,16 @@ async def upsert_special_enrollment(conn: asyncpg.Connection, data: dict) -> int
     row = await conn.fetchrow(
         """
         INSERT INTO special_enrollments (enrollment_type, special_admission_type, province_code, school_id,
-            year, title, content, publish_date, source_url, application_url, registration_window,
+            year, title, content, content_text, publish_date, source_url, application_url, registration_window,
             registration_start, registration_end, shortlist_rule, selection_rule, school_assessment,
             school_exam_rule, composite_score_formula, admission_rule,
             eligible_majors, quality_flags, content_hash, crawl_task_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
         ON CONFLICT (enrollment_type, school_id, year, title) DO UPDATE SET
             special_admission_type=EXCLUDED.special_admission_type,
             province_code=EXCLUDED.province_code,
             content=EXCLUDED.content,
+            content_text=EXCLUDED.content_text,
             publish_date=EXCLUDED.publish_date,
             source_url=EXCLUDED.source_url,
             application_url=EXCLUDED.application_url,
@@ -43,6 +44,7 @@ async def upsert_special_enrollment(conn: asyncpg.Connection, data: dict) -> int
         data["year"],
         data.get("title"),
         data.get("content"),
+        data.get("content_text"),
         data.get("publish_date"),
         data.get("source_url"),
         data.get("application_url"),
